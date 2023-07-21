@@ -24,9 +24,8 @@ func (cfg ColimaConfig) ExpandedDirectory() string {
 
 func (cfg ColimaConfig) NewTunnelConfig() (*sshtun.Config, error) {
 	rootDir := cfg.ExpandedDirectory()
-
 	sshConfigFile := filepath.Join(rootDir, "ssh_config")
-	hostName := vmNamePrefix + cfg.ProfileName
+	hostName := getSSHAlias(cfg.ProfileName)
 
 	sshCfg, err := loadSSHConfig(sshConfigFile)
 	if err != nil {
@@ -97,4 +96,12 @@ func loadSSHConfig(fileName string) (*ssh_config.Config, error) {
 	}
 
 	return cfg, nil
+}
+
+func getSSHAlias(profileName string) string {
+	if profileName == defaultProfile {
+		return "colima"
+	}
+
+	return vmNamePrefix + profileName
 }
