@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/kevinburke/ssh_config"
 	"github.com/x1unix/colima-nat-tun/internal/sshtun"
@@ -15,8 +16,9 @@ const (
 )
 
 type ColimaConfig struct {
-	Directory   string `env:"DIR" flag:"dir" default:"$HOME/.colima" usage:"Colima directory"`
-	ProfileName string `env:"PROFILE" flag:"profile" default:"default" usage:"Colima VM profile name"`
+	Directory      string        `env:"DIR" flag:"dir" default:"$HOME/.colima" usage:"Colima directory"`
+	ProfileName    string        `env:"PROFILE" flag:"profile" default:"default" usage:"Colima VM profile name"`
+	ConnectTimeout time.Duration `env:"CONN_TIMEOUT" flag:"timeout" default:"5s" usage:"SSH connect timeout"`
 }
 
 func (cfg ColimaConfig) ExpandedDirectory() string {
@@ -49,6 +51,7 @@ func (cfg ColimaConfig) NewTunnelConfig() (*sshtun.Config, error) {
 		)
 	}
 
+	tunCfg.ConnectTimeout = cfg.ConnectTimeout
 	return tunCfg, nil
 }
 

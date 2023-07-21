@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kevinburke/ssh_config"
 	"golang.org/x/crypto/ssh"
@@ -25,6 +26,9 @@ type Config struct {
 	//
 	// Use ssh.ParsePrivateKey to create a new key.
 	PrivateKeys []ssh.Signer
+
+	// ConnectTimeout is SSH connection timeout
+	ConnectTimeout time.Duration
 }
 
 type sshHostConfig struct {
