@@ -1,0 +1,52 @@
+Host colima
+  IdentityFile testdata/key.pem
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  NoHostAuthenticationForLocalhost yes
+  GSSAPIAuthentication no
+  PreferredAuthentications publickey
+  Compression no
+  BatchMode yes
+  IdentitiesOnly yes
+  Ciphers "^aes128-gcm@openssh.com,aes256-gcm@openssh.com"
+  User x1unix
+  ControlMaster auto
+  ControlPath "$HOME/.lima/colima/ssh.sock"
+  ControlPersist 5m
+  Hostname 127.0.0.1
+  Port 59244
+  User colima
+
+Host colima-x86
+  IdentityFile testdata/key.pem
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  NoHostAuthenticationForLocalhost yes
+  GSSAPIAuthentication no
+  PreferredAuthentications publickey
+  Compression no
+  BatchMode yes
+  IdentitiesOnly yes
+  Ciphers "^aes128-gcm@openssh.com,aes256-gcm@openssh.com"
+  User x1unix
+  ControlMaster auto
+  ControlPath "$HOME/.lima/colima-x86/ssh.sock"
+  ControlPersist 5m
+  Hostname 127.0.0.1
+  Port 59658
+  User superbob
+
+Host colima-broken
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+  NoHostAuthenticationForLocalhost yes
+  GSSAPIAuthentication no
+  PreferredAuthentications publickey
+  Compression no
+  BatchMode yes
+  IdentitiesOnly yes
+  Ciphers "^aes128-gcm@openssh.com,aes256-gcm@openssh.com"
+  User x1unix
+  ControlMaster auto
+  ControlPath "$HOME/.lima/colima-x86/ssh.sock"
+  ControlPersist 5m
