@@ -39,6 +39,6 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 		Str("host", tunCfg.Server).
 		Str("user", tunCfg.User).
 		Int("keys_count", len(tunCfg.PrivateKeys)).
-		Msg("SSH settings loaded successfully")
+		Msg("ssh settings loaded successfully")
 	return nil
 }
