@@ -2,10 +2,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/kevinburke/ssh_config"
-	"github.com/x1unix/colima-nat-tun/internal/sshtun"
 	"os"
 	"path/filepath"
+
+	"github.com/kevinburke/ssh_config"
+	"github.com/x1unix/colima-nat-tun/internal/sshtun"
 )
 
 const (
