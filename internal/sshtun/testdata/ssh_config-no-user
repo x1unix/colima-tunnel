@@ -1,0 +1,5 @@
+Host test
+  IdentityFile testdata/key-valid-1.pem
+  IdentityFile testdata/key-valid-2.pem
+  Hostname 127.0.0.12
+  Port 2222

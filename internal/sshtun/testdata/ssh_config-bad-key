@@ -1,0 +1,5 @@
+Host test
+  IdentityFile testdata/missing-key.pem
+  Hostname 127.0.0.12
+  Port 2222
+  User root
