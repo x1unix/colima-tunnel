@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"strconv"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
-	"github.com/songgao/packets/ethernet"
 	"github.com/songgao/water"
 )
 
@@ -19,10 +17,6 @@ const (
 
 	ifconfigCmd = "ifconfig"
 )
-
-type commandRunner interface {
-	RunCommand(cmd *exec.Cmd) error
-}
 
 type Listener struct {
 	log zerolog.Logger
@@ -91,8 +85,7 @@ func (l *Listener) listen(ctx context.Context) {
 		}
 
 		// TODO: use bytes pool
-		var packet ethernet.Frame
-		packet.Resize(int(l.cfg.MTU))
+		packet := make([]byte, l.cfg.MTU)
 		n, err := l.iface.Read(packet)
 		if err != nil {
 			if ctx.Err() != nil {
@@ -109,16 +102,12 @@ func (l *Listener) listen(ctx context.Context) {
 	}
 }
 
-func (l *Listener) handlePacket(packet ethernet.Frame) {
-	dst := packet.Destination()
-	src := packet.Source()
-	ethType := packet.Ethertype()
-
+func (l *Listener) handlePacket(packet []byte) {
 	l.log.Debug().Hex("packet", packet).
-		MACAddr("dst", dst).
-		MACAddr("src", src).
-		Stringer("type", pkgTypeStringer{ethType}).
-		Msg("received Ethernet frame")
+		Msg("received packet")
+
+	// As this is a p2p tunnel, we're expecting a IP packet here.
+
 }
 
 func (l *Listener) closeInterface() {

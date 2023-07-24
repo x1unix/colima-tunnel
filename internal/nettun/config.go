@@ -1,6 +1,7 @@
 package nettun
 
 import (
+	"errors"
 	"fmt"
 	"net"
 )
@@ -39,6 +40,10 @@ func NewConfig(clientIP, cidr string, mtu uint) (*Config, error) {
 			fmt.Errorf("invalid MTU size %d. MTU size should be between %d and %d",
 				mtu, minMTU, maxMTU,
 			)
+	}
+
+	if len(clientAddr) > 4 {
+		return nil, errors.New("only IPv4 networks are supported")
 	}
 
 	gatewayAddr := getLastIP(vnet)

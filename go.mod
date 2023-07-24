@@ -8,6 +8,7 @@ require (
 	github.com/cristalhq/aconfig/aconfigdotenv v0.17.1 // indirect
 	github.com/cristalhq/aconfig/aconfigtoml v0.17.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/google/gopacket v1.1.19 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
