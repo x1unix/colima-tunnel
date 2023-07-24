@@ -9,6 +9,7 @@ import (
 	"github.com/cristalhq/aconfig"
 	"github.com/cristalhq/aconfig/aconfigdotenv"
 	"github.com/cristalhq/aconfig/aconfigtoml"
+	"github.com/x1unix/colima-nat-tun/internal/nettun"
 )
 
 type Config struct {
@@ -20,6 +21,11 @@ type Config struct {
 type NetworkConfig struct {
 	IP   string `env:"IP" flag:"ip" default:"100.64.0.10" usage:"Client IP address"`
 	CIDR string `env:"CIDR" flag:"cidr" default:"100.64.0.0/24" usage:"Subnet CIDR"`
+	MTU  uint   `env:"MTU" flag:"mtu" default:"1500" usage:"Maximum transmission unit (MTU) size"`
+}
+
+func (cfg NetworkConfig) ListenerConfig() (*nettun.Config, error) {
+	return nettun.NewConfig(cfg.IP, cfg.CIDR, cfg.MTU)
 }
 
 func Load() (*Config, error) {

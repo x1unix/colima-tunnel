@@ -2,3 +2,5 @@
 .vscode
 /tmp
 /target
+*.env
+!example.env

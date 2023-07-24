@@ -1,9 +1,11 @@
 package main
 
 import (
+	"fmt"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/x1unix/colima-nat-tun/internal/config"
+	"github.com/x1unix/colima-nat-tun/internal/nettun"
 	"github.com/x1unix/colima-nat-tun/internal/sshtun"
 )
 
@@ -37,6 +39,11 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 		return err
 	}
 
+	listenerCfg, err := cfg.Net.ListenerConfig()
+	if err != nil {
+		return fmt.Errorf("invalid network config, %w", err)
+	}
+
 	logger.Info().
 		Str("host", tunCfg.Server).
 		Str("user", tunCfg.User).
@@ -45,6 +52,15 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 
 	ctx, cancelFn := config.NewApplicationContext()
 	defer cancelFn()
+
+	listener := nettun.NewListener(logger, *listenerCfg)
+	defer listener.Close()
+
+	go func() {
+		if err := listener.Start(ctx); err != nil {
+			logger.Fatal().Err(err).Msg("failed to start tunnel listener")
+		}
+	}()
 
 	mgr := sshtun.NewManager(*tunCfg)
 	if err := mgr.Connect(); err != nil {
