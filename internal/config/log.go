@@ -9,13 +9,17 @@ import (
 )
 
 type LogConfig struct {
-	Level zerolog.Level `env:"LEVEL" flag:"level" default:"info" usage:"Log level (debug,info,warn,error)"`
-	File  string        `env:"FILE" flag:"file" usage:"Log file path"`
+	Level   zerolog.Level `env:"LEVEL" flag:"level" default:"info" usage:"Log level (debug,info,warn,error)"`
+	NoColor bool          `env:"NO_COLOR" flag:"no-color" usage:"disable colorful output to stdout"`
+	File    string        `env:"FILE" flag:"file" usage:"Log file path"`
 }
 
 func (cfg LogConfig) NewLogger() (zerolog.Logger, io.Closer, error) {
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	conWriter := zerolog.NewConsoleWriter()
+	conWriter := zerolog.NewConsoleWriter(func(w *zerolog.ConsoleWriter) {
+		w.NoColor = cfg.NoColor
+	})
+
 	if cfg.File == "" {
 		return buildLogger(cfg.Level, conWriter), io.NopCloser(nil), nil
 	}
