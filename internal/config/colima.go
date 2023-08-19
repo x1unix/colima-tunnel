@@ -1,11 +1,14 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"time"
 
+	docker "github.com/docker/docker/client"
 	"github.com/kevinburke/ssh_config"
 	"github.com/x1unix/colima-nat-tun/internal/sshtun"
 )
@@ -18,13 +21,41 @@ const (
 type ColimaConfig struct {
 	Directory      string        `env:"DIR" flag:"dir" default:"$HOME/.colima" usage:"Colima directory"`
 	ProfileName    string        `env:"PROFILE" flag:"profile" default:"default" usage:"Colima VM profile name"`
-	ConnectTimeout time.Duration `env:"CONN_TIMEOUT" flag:"timeout" default:"5s" usage:"SSH connect timeout"`
+	ConnectTimeout time.Duration `env:"CONN_TIMEOUT" flag:"timeout" default:"5s" usage:"SSH and Docker connect timeout"`
 }
 
+// ExpandedDirectory returns Colima directory path with expanded environment variables.
 func (cfg ColimaConfig) ExpandedDirectory() string {
 	return os.ExpandEnv(cfg.Directory)
 }
 
+// NewDockerClient constructs a new Docker API client for Colima profile.
+func (cfg ColimaConfig) NewDockerClient() (*docker.Client, error) {
+	sockFileDir := filepath.Join(cfg.ExpandedDirectory(), cfg.ProfileName, "docker.sock")
+	if _, err := os.Stat(sockFileDir); err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, fmt.Errorf(
+				"docker socker doesn't exists, please ensure that Colima VM is running (socket: %q)", sockFileDir,
+			)
+		}
+
+		return nil, fmt.Errorf("cannot access docker socket: %w (socket: %q)", err, sockFileDir)
+	}
+
+	c, err := docker.NewClientWithOpts(
+		docker.WithAPIVersionNegotiation(),
+		docker.WithTLSClientConfigFromEnv(),
+		docker.WithHost("unix://"+sockFileDir),
+		docker.WithTimeout(cfg.ConnectTimeout),
+	)
+	if err != nil {
+		err = fmt.Errorf("failed to build docker client: %w", err)
+	}
+
+	return c, err
+}
+
+// NewTunnelConfig constructs a new SSH tunnel manager config.
 func (cfg ColimaConfig) NewTunnelConfig() (*sshtun.Config, error) {
 	rootDir := cfg.ExpandedDirectory()
 	sshConfigFile := filepath.Join(rootDir, "ssh_config")

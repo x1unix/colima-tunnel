@@ -1,7 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"time"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/x1unix/colima-nat-tun/internal/config"
@@ -53,6 +56,20 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 	ctx, cancelFn := config.NewApplicationContext()
 	defer cancelFn()
 
+	dockerClient, err := cfg.Colima.NewDockerClient()
+	if err != nil {
+		return err
+	}
+
+	dockerInfo, err := doWithTimeout(ctx, cfg.Colima.ConnectTimeout, dockerClient.Ping)
+	if err != nil {
+		return fmt.Errorf("failed to connect to Docker, is colima VM running? (%w)", err)
+	}
+
+	logger.Info().
+		Str("api_ver", dockerInfo.APIVersion).
+		Msg("successfully connected to Docker")
+
 	listener := nettun.NewListener(logger, *listenerCfg)
 	defer listener.Close()
 
@@ -70,4 +87,11 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 
 	<-ctx.Done()
 	return nil
+}
+
+func doWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
+	timeoutCtx, cancelFn := context.WithTimeout(ctx, timeout)
+	defer cancelFn()
+
+	return fn(timeoutCtx)
 }
