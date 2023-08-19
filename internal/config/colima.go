@@ -99,6 +99,9 @@ func loadSSHConfig(fileName string) (*ssh_config.Config, error) {
 		return nil, fmt.Errorf("failed to parse Colima ssh config file %q: %w", fileName, err)
 	}
 
+	if isSSHConfigEmpty(cfg) {
+		return nil, fmt.Errorf("empty Colima ssh config, please ensure that colima VM is running (file: %s)", fileName)
+	}
 	return cfg, nil
 }
 
@@ -108,4 +111,14 @@ func getSSHAlias(profileName string) string {
 	}
 
 	return vmNamePrefix + profileName
+}
+
+func isSSHConfigEmpty(cfg *ssh_config.Config) bool {
+	for _, host := range cfg.Hosts {
+		if len(host.Nodes) > 0 {
+			return false
+		}
+	}
+
+	return true
 }
