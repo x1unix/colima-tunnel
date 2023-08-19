@@ -42,7 +42,7 @@ func NewConfig(clientIP, cidr string, mtu uint) (*Config, error) {
 			)
 	}
 
-	if len(clientAddr) > 4 {
+	if clientAddr.To4() == nil {
 		return nil, errors.New("only IPv4 networks are supported")
 	}
 
