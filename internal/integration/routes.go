@@ -2,6 +2,7 @@ package integration
 
 import (
 	"context"
+	"sync"
 
 	"github.com/docker/docker/api/types"
 	"github.com/hashicorp/go-multierror"
@@ -19,6 +20,7 @@ type RouteTableManager struct {
 	networkMgr    platform.RouteTableManager
 
 	subnets *set.Set[string]
+	lock    sync.Mutex
 }
 
 func NewRouteTableManager(log zerolog.Logger, netMgr platform.RouteTableManager, interfaceName string) *RouteTableManager {
@@ -35,6 +37,10 @@ func (r *RouteTableManager) Close() error {
 		errs     error
 		hasError bool
 	)
+
+	// Prevent concurrent close from multiple goroutines
+	r.lock.Lock()
+	defer r.lock.Unlock()
 
 	r.log.Debug().Msg("removing all registered rules")
 	r.subnets.RemoveFunc(func(subnet string) bool {
