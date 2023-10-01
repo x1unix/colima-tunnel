@@ -8,7 +8,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
-const ifconfigCmd = "ifconfig"
+const (
+	ifconfigCmd = "ifconfig"
+	routeCmd    = "route"
+)
 
 type darwinNetworkManager struct {
 	cmdRunner CommandRunner
@@ -31,6 +34,20 @@ func (mgr darwinNetworkManager) SetInterfaceMTU(ctx context.Context, iface strin
 	return mgr.cmdRunner.RunCommand(
 		ctx, ifconfigCmd,
 		iface, "mtu", strconv.FormatUint(uint64(mtu), 10),
+	)
+}
+
+func (mgr darwinNetworkManager) AddRoute(ctx context.Context, subnet, iface string) error {
+	return mgr.cmdRunner.RunCommand(
+		ctx, routeCmd, "-q", "-n", "add",
+		"-inet", subnet, "-interface", iface,
+	)
+}
+
+func (mgr darwinNetworkManager) RemoveRoute(ctx context.Context, subnet string) error {
+	return mgr.cmdRunner.RunCommand(
+		ctx, routeCmd, "-q", "-n", "delete",
+		"-inet", subnet,
 	)
 }
 
