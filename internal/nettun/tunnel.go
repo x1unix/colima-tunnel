@@ -18,7 +18,7 @@ const (
 	ifconfigCmd = "ifconfig"
 )
 
-type Listener struct {
+type Tunnel struct {
 	log zerolog.Logger
 	cfg Config
 
@@ -29,10 +29,10 @@ type Listener struct {
 	cancelFn    context.CancelFunc
 }
 
-func NewListener(log zerolog.Logger, cfg Config) *Listener {
+func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 	logger := log.With().Str("context", "listener").Logger()
 
-	return &Listener{
+	return &Tunnel{
 		log: logger,
 		cfg: cfg,
 		r: systemCommandRunner{
@@ -41,7 +41,7 @@ func NewListener(log zerolog.Logger, cfg Config) *Listener {
 	}
 }
 
-func (l *Listener) Start(ctx context.Context) error {
+func (l *Tunnel) Start(ctx context.Context) error {
 	iface, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})
@@ -62,7 +62,7 @@ func (l *Listener) Start(ctx context.Context) error {
 	return nil
 }
 
-func (l *Listener) Close() error {
+func (l *Tunnel) Close() error {
 	if l.cancelFn == nil {
 		return errors.New("listener already closed")
 	}
@@ -73,7 +73,7 @@ func (l *Listener) Close() error {
 	return nil
 }
 
-func (l *Listener) listen(ctx context.Context) {
+func (l *Tunnel) listen(ctx context.Context) {
 	defer l.closeInterface()
 
 	l.isListening.Store(true)
@@ -102,7 +102,7 @@ func (l *Listener) listen(ctx context.Context) {
 	}
 }
 
-func (l *Listener) handlePacket(packet []byte) {
+func (l *Tunnel) handlePacket(packet []byte) {
 	l.log.Debug().Hex("packet", packet).
 		Msg("received packet")
 
@@ -110,7 +110,7 @@ func (l *Listener) handlePacket(packet []byte) {
 
 }
 
-func (l *Listener) closeInterface() {
+func (l *Tunnel) closeInterface() {
 	if !l.isListening.Load() {
 		l.log.Debug().Msg("listener already closed, skip close")
 		return
@@ -130,7 +130,7 @@ func (l *Listener) closeInterface() {
 		Msg("tunnel closed successfully")
 }
 
-func (l *Listener) configureTunnel(ctx context.Context) error {
+func (l *Tunnel) configureTunnel(ctx context.Context) error {
 	ifaceName := l.iface.Name()
 
 	l.log.Info().

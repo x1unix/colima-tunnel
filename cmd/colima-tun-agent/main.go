@@ -70,7 +70,7 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 		Str("api_ver", dockerInfo.APIVersion).
 		Msg("successfully connected to Docker")
 
-	listener := nettun.NewListener(logger, *listenerCfg)
+	listener := nettun.NewTunnel(logger, *listenerCfg)
 	defer listener.Close()
 
 	go func() {
