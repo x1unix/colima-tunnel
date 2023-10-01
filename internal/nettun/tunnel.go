@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strconv"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
@@ -14,8 +13,6 @@ import (
 const (
 	maxMTU = 1600
 	minMTU = 576
-
-	ifconfigCmd = "ifconfig"
 )
 
 type Tunnel struct {
@@ -24,7 +21,7 @@ type Tunnel struct {
 
 	isListening atomic.Bool
 	iface       *water.Interface
-	r           CommandRunner
+	netMgr      NetworkManager
 	ctx         context.Context
 	cancelFn    context.CancelFunc
 }
@@ -33,11 +30,9 @@ func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 	logger := log.With().Str("context", "listener").Logger()
 
 	return &Tunnel{
-		log: logger,
-		cfg: cfg,
-		r: systemCommandRunner{
-			log: logger,
-		},
+		log:    logger,
+		cfg:    cfg,
+		netMgr: GetNetworkManager(log),
 	}
 }
 
@@ -140,9 +135,8 @@ func (l *Tunnel) configureTunnel(ctx context.Context) error {
 		IPPrefix("net", *l.cfg.Network).
 		Msg("assigning IP address...")
 
-	err := l.r.RunCommand(
-		ctx, ifconfigCmd,
-		l.iface.Name(), l.cfg.ClientIP.String(), l.cfg.GatewayIP.String(),
+	err := l.netMgr.SetInterfaceAddress(
+		ctx, l.iface.Name(), l.cfg.ClientIP, l.cfg.GatewayIP,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to configure tunnel IP address: %w", err)
@@ -152,10 +146,7 @@ func (l *Tunnel) configureTunnel(ctx context.Context) error {
 		Str("tun", ifaceName).
 		Uint("mtu", l.cfg.MTU).
 		Msg("updating interface MTU...")
-	err = l.r.RunCommand(
-		ctx, ifconfigCmd,
-		l.iface.Name(), "mtu", strconv.FormatUint(uint64(l.cfg.MTU), 10),
-	)
+	err = l.netMgr.SetInterfaceMTU(ctx, l.iface.Name(), l.cfg.MTU)
 	if err != nil {
 		return fmt.Errorf("failed to set MTU: %w", err)
 	}
