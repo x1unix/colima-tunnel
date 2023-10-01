@@ -93,9 +93,6 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 	)
 	dockerListener := integration.NewDockerListener(logger, dockerClient, routeMgr)
 	if err := dockerListener.Start(ctx); err != nil {
-		return err
-	}
-	if err := dockerListener.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start Docker event listener: %w", err)
 	}
 	defer dockerListener.Close()

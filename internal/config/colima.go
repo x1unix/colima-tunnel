@@ -46,7 +46,9 @@ func (cfg ColimaConfig) NewDockerClient() (*docker.Client, error) {
 		docker.WithAPIVersionNegotiation(),
 		docker.WithTLSClientConfigFromEnv(),
 		docker.WithHost("unix://"+sockFileDir),
-		docker.WithTimeout(cfg.ConnectTimeout),
+
+		// WithTimeout() breaks Docker events polling, disable for now.
+		//docker.WithTimeout(cfg.ConnectTimeout),
 	)
 	if err != nil {
 		err = fmt.Errorf("failed to build docker client: %w", err)
