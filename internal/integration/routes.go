@@ -28,6 +28,7 @@ func NewRouteTableManager(log zerolog.Logger, netMgr platform.RouteTableManager,
 		log:           log.With().Str("context", "route").Logger(),
 		interfaceName: interfaceName,
 		networkMgr:    netMgr,
+		subnets:       set.New[string](0),
 	}
 }
 

@@ -91,12 +91,13 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 	routeMgr := integration.NewRouteTableManager(
 		logger, platform.GetNetworkManager(logger), listener.Name(),
 	)
+	defer routeMgr.Close()
+
 	dockerListener := integration.NewDockerListener(logger, dockerClient, routeMgr)
 	if err := dockerListener.Start(ctx); err != nil {
 		return fmt.Errorf("failed to start Docker event listener: %w", err)
 	}
 	defer dockerListener.Close()
-	defer routeMgr.Close()
 
 	<-ctx.Done()
 	return nil
