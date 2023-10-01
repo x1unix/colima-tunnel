@@ -1,4 +1,4 @@
-package nettun
+package platform
 
 import (
 	"context"
@@ -52,7 +52,5 @@ func (mgr darwinNetworkManager) RemoveRoute(ctx context.Context, subnet string) 
 }
 
 func provideSystemNetworkManager(logger zerolog.Logger) NetworkManager {
-	return newDarwinNetworkManager(systemCommandRunner{
-		log: logger,
-	})
+	return newDarwinNetworkManager(GetCommandRunner(logger))
 }

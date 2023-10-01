@@ -1,10 +1,16 @@
-package nettun
+package platform
 
 import (
 	"context"
 	"os/exec"
+	"sync"
 
 	"github.com/rs/zerolog"
+)
+
+var (
+	cmdRunner CommandRunner
+	cmdOnce   sync.Once
 )
 
 type CommandRunner interface {
@@ -34,4 +40,13 @@ func (r systemCommandRunner) RunCommand(ctx context.Context, name string, args .
 	cmd.Stdout = stdout
 	cmd.Stderr = stderr
 	return cmd.Run()
+}
+
+// GetCommandRunner returns global command runner.
+func GetCommandRunner(logger zerolog.Logger) CommandRunner {
+	cmdOnce.Do(func() {
+		cmdRunner = systemCommandRunner{log: logger}
+	})
+
+	return cmdRunner
 }

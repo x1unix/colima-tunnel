@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/x1unix/colima-nat-tun/internal/platform"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
@@ -21,7 +22,7 @@ type Tunnel struct {
 
 	isListening atomic.Bool
 	iface       *water.Interface
-	netMgr      NetworkManager
+	netMgr      platform.NetworkManager
 	ctx         context.Context
 	cancelFn    context.CancelFunc
 }
@@ -32,7 +33,7 @@ func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 	return &Tunnel{
 		log:    logger,
 		cfg:    cfg,
-		netMgr: GetNetworkManager(log),
+		netMgr: platform.GetNetworkManager(log),
 	}
 }
 

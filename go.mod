@@ -1,6 +1,8 @@
 module github.com/x1unix/colima-nat-tun
 
-go 1.20
+go 1.21
+
+toolchain go1.21.1
 
 require (
 	github.com/BurntSushi/toml v1.3.2 // indirect
@@ -15,6 +17,9 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/google/gopacket v1.1.19 // indirect
+	github.com/hashicorp/errwrap v1.0.0 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
+	github.com/hashicorp/go-set v0.1.14 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/kelseyhightower/envconfig v1.4.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect

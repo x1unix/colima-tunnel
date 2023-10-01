@@ -17,9 +17,9 @@ import (
 type NetworkEventHandler interface {
 	io.Closer
 
-	HandleNetworksListReady(nets []types.NetworkResource)
-	HandleNetworkCreated(network types.NetworkResource)
-	HandleNetworkDestroyed(network types.NetworkResource)
+	HandleNetworksListReady(ctx context.Context, nets []types.NetworkResource)
+	HandleNetworkCreated(ctx context.Context, network types.NetworkResource)
+	HandleNetworkDestroyed(ctx context.Context, network types.NetworkResource)
 }
 
 // DockerListener listens for Docker network create and destroy events.
@@ -54,7 +54,7 @@ func (listener *DockerListener) Start(ctx context.Context) error {
 
 	// Notify initial networks list & prefill known networks map
 	listener.log.Debug().Msgf("fetched %d networks from Docker", len(networks))
-	listener.handler.HandleNetworksListReady(networks)
+	listener.handler.HandleNetworksListReady(ctx, networks)
 	listener.knownNetworks = make(map[string]types.NetworkResource, len(networks))
 	for _, network := range networks {
 		listener.knownNetworks[network.ID] = network
@@ -140,14 +140,14 @@ func (listener *DockerListener) handleNetworkEvent(ctx context.Context, event ev
 		}
 
 		listener.knownNetworks[networkID] = network
-		listener.handler.HandleNetworkCreated(network)
+		listener.handler.HandleNetworkCreated(ctx, network)
 	case "destroy":
 		network, ok := listener.knownNetworks[networkID]
 		if !ok {
 			return fmt.Errorf("unkown network destroyed: %s", networkID)
 		}
 
-		listener.handler.HandleNetworkDestroyed(network)
+		listener.handler.HandleNetworkDestroyed(ctx, network)
 		delete(listener.knownNetworks, networkID)
 	}
 

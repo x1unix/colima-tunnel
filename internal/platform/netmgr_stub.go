@@ -1,7 +1,7 @@
 //go:build !darwin
 // +build !darwin
 
-package nettun
+package platform
 
 func provideSystemNetworkManager(_ zerolog.Logger) NetworkManager {
 	// Stub for compile-time error
