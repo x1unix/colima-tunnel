@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/x1unix/colima-nat-tun/internal/platform"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
 	"github.com/songgao/water"
+	"github.com/x1unix/colima-nat-tun/internal/platform"
 )
 
 const (
@@ -37,6 +37,16 @@ func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 	}
 }
 
+// Name returns tunnel interface name.
+func (l *Tunnel) Name() string {
+	if l == nil {
+		return ""
+	}
+
+	return l.iface.Name()
+}
+
+// Start starts network tunnel.
 func (l *Tunnel) Start(ctx context.Context) error {
 	iface, err := water.New(water.Config{
 		DeviceType: water.TUN,

@@ -8,7 +8,9 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/x1unix/colima-nat-tun/internal/config"
+	"github.com/x1unix/colima-nat-tun/internal/integration"
 	"github.com/x1unix/colima-nat-tun/internal/nettun"
+	"github.com/x1unix/colima-nat-tun/internal/platform"
 	"github.com/x1unix/colima-nat-tun/internal/sshtun"
 )
 
@@ -84,6 +86,20 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 		return err
 	}
 	defer mgr.Close()
+
+	// Init routing table sync
+	routeMgr := integration.NewRouteTableManager(
+		logger, platform.GetNetworkManager(logger), listener.Name(),
+	)
+	dockerListener := integration.NewDockerListener(logger, dockerClient, routeMgr)
+	if err := dockerListener.Start(ctx); err != nil {
+		return err
+	}
+	if err := dockerListener.Start(ctx); err != nil {
+		return fmt.Errorf("failed to start Docker event listener: %w", err)
+	}
+	defer dockerListener.Close()
+	defer routeMgr.Close()
 
 	<-ctx.Done()
 	return nil

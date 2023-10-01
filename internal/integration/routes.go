@@ -23,7 +23,7 @@ type RouteTableManager struct {
 
 func NewRouteTableManager(log zerolog.Logger, netMgr platform.RouteTableManager, interfaceName string) *RouteTableManager {
 	return &RouteTableManager{
-		log:           log,
+		log:           log.With().Str("context", "route").Logger(),
 		interfaceName: interfaceName,
 		networkMgr:    netMgr,
 	}
@@ -36,6 +36,7 @@ func (r *RouteTableManager) Close() error {
 		hasError bool
 	)
 
+	r.log.Debug().Msg("removing all registered rules")
 	r.subnets.RemoveFunc(func(subnet string) bool {
 		err := r.networkMgr.RemoveRoute(context.Background(), subnet)
 		if err != nil {
