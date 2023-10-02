@@ -33,11 +33,11 @@ func (r systemCommandRunner) RunCommand(ctx context.Context, name string, args .
 		Str("cmd", name).
 		Strs("cmdline", cmd.Args).
 		Str("type", "stdout").
-		Str(zerolog.LevelFieldName, zerolog.DebugLevel.String()).
+		Stringer(zerolog.LevelFieldName, zerolog.DebugLevel).
 		Logger()
 
 	stderr := r.log.With().
-		Str(zerolog.LevelFieldName, zerolog.ErrorLevel.String()).
+		Stringer(zerolog.LevelFieldName, zerolog.ErrorLevel).
 		Str("cmd", name).
 		Strs("cmdline", cmd.Args).
 		Str("type", "stderr").
