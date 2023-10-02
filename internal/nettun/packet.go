@@ -56,19 +56,48 @@ type Layers struct {
 	// Transport is transport layer packet frame.
 	//
 	// Usually it's pointer to layers.TCP or layers.UDP.
-	Transport any
+	Transport gopacket.Layer
 
 	// Network is network packet frame.
 	//
 	// Usually it's pointer to layers.IPv6 or layers.IPv4
-	Network any
+	Network gopacket.Layer
 
 	// Control contains network control layer, usually ICMP.
-	Control any
+	Control gopacket.Layer
+}
+
+// FragmentData contains IP fragment information.
+type FragmentData struct {
+	Fragment gopacket.Fragment
+
+	// FragmentOffset is fragment position from the start of original packet.
+	FragmentOffset int
+
+	// IsLast identifies if it's a last fragment.
+	IsLast bool
+}
+
+type IPData struct {
+	// Length is packet total length including metadata.
+	Length int
+
+	// TTL is max packet hop count.
+	TTL uint
+
+	// FragmentData contains fragment information.
+	//
+	// Nil when packet is not fragmented.
+	FragmentData *FragmentData
 }
 
 // Packet is parsed IP packet payload.
 type Packet struct {
+	IPData
+
+	// ID is packet ID.
+	ID uint16
+
 	// Source is packet sender address.
 	Source net.Addr
 
@@ -88,6 +117,11 @@ type Packet struct {
 	//
 	// Extracted from transport layer.
 	Payload []byte
+}
+
+// IsFragmented returns whether a packet is fragmented.
+func (p Packet) IsFragmented() bool {
+	return p.FragmentData != nil
 }
 
 // ParsePacket parses IP packet contents from payload.
@@ -113,11 +147,13 @@ func ParsePacket(data []byte) (*Packet, error) {
 		return nil, fmt.Errorf("failed to decode layers: %w", err)
 	}
 
+	// TODO: use IP protocol field instead
 	var (
 		srcPort        int
 		dstPort        int
 		srcIP          net.IP
 		dstIP          net.IP
+		ipData         IPData
 		netType        NetworkType
 		transportType  TransportType
 		packetContents []byte
@@ -130,11 +166,22 @@ func ParsePacket(data []byte) (*Packet, error) {
 			dstIP = ip4.DstIP
 			netType = IPv4Network
 			l.Network = &ip4
+
+			ipData = IPData{
+				Length:       int(ip4.Length),
+				TTL:          uint(ip4.TTL),
+				FragmentData: extractFragmentData(&ip4),
+			}
 		case layers.LayerTypeIPv6:
 			srcIP = ip6.SrcIP
 			dstIP = ip6.DstIP
 			netType = IPv6Network
 			l.Network = &ip6
+			ipData = IPData{
+				Length:       int(ip6.Length),
+				TTL:          uint(ip6.HopLimit),
+				FragmentData: extractFragmentData(&ip4),
+			}
 		case layers.LayerTypeTCP:
 			srcPort = int(tcp.SrcPort)
 			dstPort = int(tcp.DstPort)
@@ -154,23 +201,27 @@ func ParsePacket(data []byte) (*Packet, error) {
 		case gopacket.LayerTypePayload:
 			packetContents = payload
 		case gopacket.LayerTypeFragment:
-			packetContents = fragment
+			if ipData.FragmentData == nil {
+				return nil, fmt.Errorf("unexpected fragment layer: %x", fragment)
+			}
+
+			ipData.FragmentData.Fragment = fragment
 		default:
 			// TODO: support SCTP?
-			// TODO: support Fragment!!!
 			return nil, fmt.Errorf("unsupported layer type: %s", layerType.String())
 		}
 	}
 
-	// TODO: support Fragment - https://chat.openai.com/share/3d3ad75a-cef1-4e01-9064-0f4cd75a00ec
 	packet := Packet{
+		IPData:        ipData,
 		TransportType: transportType,
 		NetworkType:   netType,
 		Layers:        l,
 		Payload:       packetContents,
 	}
 
-	if l.Control != nil {
+	// Skip transport parsing if packet is fragmented, or it's ICMP packet.
+	if l.Control != nil || packet.IsFragmented() {
 		packet.Source = &net.IPAddr{IP: srcIP}
 		packet.Dest = &net.IPAddr{IP: dstIP}
 		return &packet, nil
@@ -216,4 +267,29 @@ func SplitAddr(addr net.Addr) (net.IP, int) {
 	}
 
 	return nil, 0
+}
+
+func extractFragmentData(pkg gopacket.Layer) *FragmentData {
+	ip4, ok := pkg.(*layers.IPv4)
+	if !ok {
+		// TODO: support IPv6
+		return nil
+	}
+
+	fragData := FragmentData{
+		FragmentOffset: int(ip4.FragOffset * 8),
+	}
+
+	// If this is a fragment?
+	if ip4.Flags&layers.IPv4MoreFragments != 0 {
+		return &fragData
+	}
+
+	// Is it a last fragment?
+	if ip4.FragOffset > 0 {
+		fragData.IsLast = true
+		return &fragData
+	}
+
+	return nil
 }

@@ -123,6 +123,7 @@ func (l *Tunnel) handlePacket(packet *Packet) {
 		Stringer("dst", packet.Dest).
 		Stringer("transport", packet.TransportType).
 		Stringer("network", packet.NetworkType).
+		Bool("fragmented", packet.IsFragmented()).
 		Type("control", packet.Layers.Control).
 		Hex("payload", packet.Payload).
 		Msg("received network packet")
