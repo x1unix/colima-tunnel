@@ -14,13 +14,13 @@ type TransportType uint
 func (t TransportType) String() string {
 	switch t {
 	case TCPTransportType:
-		return "TCPTransportType"
+		return "tcp"
 	case UDPTransportType:
-		return "UDPTransportType"
+		return "udp"
 	case NoTransportType:
-		return "NoTransportType"
+		return "none"
 	default:
-		return fmt.Sprintf("TransportType(%d)", t)
+		return fmt.Sprintf("unknown(%d)", t)
 	}
 }
 
@@ -35,13 +35,13 @@ type NetworkType uint
 func (t NetworkType) String() string {
 	switch t {
 	case IPv4Network:
-		return "IPv4Network"
+		return "ipv4"
 	case IPv6Network:
-		return "IPv6Network"
+		return "ipv6"
 	case NoNetwork:
-		return "NoNetwork"
+		return "none"
 	default:
-		return fmt.Sprintf("NetworkType(%d)", t)
+		return fmt.Sprintf("unknown(%d)", t)
 	}
 }
 
