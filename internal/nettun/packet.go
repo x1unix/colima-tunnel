@@ -100,11 +100,12 @@ func ParsePacket(data []byte) (*Packet, error) {
 		icmp4 layers.ICMPv4
 		icmp6 layers.ICMPv6
 
-		payload gopacket.Payload
+		fragment gopacket.Fragment
+		payload  gopacket.Payload
 	)
 
 	parser := gopacket.NewDecodingLayerParser(
-		layers.LayerTypeIPv4, &ip4, &ip6, &icmp4, &icmp6, &tcp, &udp, &payload,
+		layers.LayerTypeIPv4, &ip4, &ip6, &icmp4, &icmp6, &tcp, &udp, &payload, &fragment,
 	)
 	decodedLayers := make([]gopacket.LayerType, 0, 10)
 	err := parser.DecodeLayers(data, &decodedLayers)
@@ -113,13 +114,14 @@ func ParsePacket(data []byte) (*Packet, error) {
 	}
 
 	var (
-		srcPort       int
-		dstPort       int
-		srcIP         net.IP
-		dstIP         net.IP
-		netType       NetworkType
-		transportType TransportType
-		l             Layers
+		srcPort        int
+		dstPort        int
+		srcIP          net.IP
+		dstIP          net.IP
+		netType        NetworkType
+		transportType  TransportType
+		packetContents []byte
+		l              Layers
 	)
 	for _, layerType := range decodedLayers {
 		switch layerType {
@@ -150,8 +152,9 @@ func ParsePacket(data []byte) (*Packet, error) {
 			// src and dest IP is parsed at layer above
 			l.Control = &icmp6
 		case gopacket.LayerTypePayload:
-			// whatever
-			continue
+			packetContents = payload
+		case gopacket.LayerTypeFragment:
+			packetContents = fragment
 		default:
 			// TODO: support SCTP?
 			// TODO: support Fragment!!!
@@ -159,11 +162,12 @@ func ParsePacket(data []byte) (*Packet, error) {
 		}
 	}
 
+	// TODO: support Fragment - https://chat.openai.com/share/3d3ad75a-cef1-4e01-9064-0f4cd75a00ec
 	packet := Packet{
 		TransportType: transportType,
 		NetworkType:   netType,
 		Layers:        l,
-		Payload:       payload,
+		Payload:       packetContents,
 	}
 
 	if l.Control != nil {
