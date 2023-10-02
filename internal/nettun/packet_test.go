@@ -82,6 +82,10 @@ func TestParsePacket(t *testing.T) {
 				},
 				TransportType: TCPTransportType,
 				NetworkType:   IPv4Network,
+				IPData: IPData{
+					Length: 64,
+					TTL:    64,
+				},
 				Layers: Layers{
 					Transport: &layers.TCP{
 						SrcPort:    49386,
@@ -110,6 +114,81 @@ func TestParsePacket(t *testing.T) {
 				Payload: nil,
 			},
 		},
+		"decode UDP first fragment": {
+			src: fileSource("testdata/udp-frag-1.bin"),
+			expect: &Packet{
+				Source: &net.IPAddr{
+					IP: net.IP{100, 64, 0, 10},
+				},
+				Dest: &net.IPAddr{
+					IP: net.IP{10, 20, 0, 10},
+				},
+				NetworkType: IPv4Network,
+				IPData: IPData{
+					ID:     0xd933,
+					Length: 1500,
+					TTL:    64,
+					FragmentData: &FragmentData{
+						FragmentOffset: 0,
+						IsFirst:        true,
+					},
+				},
+				Layers: Layers{
+					Network: &layers.IPv4{
+						Version:    4,
+						IHL:        5,
+						TOS:        0,
+						Length:     1500,
+						Id:         0xd933,
+						Flags:      layers.IPv4MoreFragments,
+						FragOffset: 0,
+						TTL:        64,
+						Protocol:   layers.IPProtocolUDP,
+						Checksum:   0x0d76,
+						SrcIP:      net.IP{100, 64, 0, 10},
+						DstIP:      net.IP{10, 20, 0, 10},
+					},
+				},
+				Payload: nil,
+			},
+		},
+		"decode UDP final fragment": {
+			src: fileSource("testdata/udp-frag-fin.bin"),
+			expect: &Packet{
+				Source: &net.IPAddr{
+					IP: net.IP{100, 64, 0, 10},
+				},
+				Dest: &net.IPAddr{
+					IP: net.IP{10, 20, 0, 10},
+				},
+				NetworkType: IPv4Network,
+				IPData: IPData{
+					ID:     0xd933,
+					Length: 88,
+					TTL:    64,
+					FragmentData: &FragmentData{
+						FragmentOffset: 4440,
+						IsLast:         true,
+					},
+				},
+				Layers: Layers{
+					Network: &layers.IPv4{
+						Version:    4,
+						IHL:        5,
+						TOS:        0,
+						Length:     88,
+						Id:         0xd933,
+						FragOffset: 555,
+						TTL:        64,
+						Protocol:   layers.IPProtocolUDP,
+						Checksum:   0x30cf,
+						SrcIP:      net.IP{100, 64, 0, 10},
+						DstIP:      net.IP{10, 20, 0, 10},
+					},
+				},
+				Payload: nil,
+			},
+		},
 	}
 
 	for n, c := range cases {
@@ -132,6 +211,10 @@ func TestParsePacket(t *testing.T) {
 }
 
 func sanitizeIncomparable(t *testing.T, pkg *Packet) {
+	if pkg.FragmentData != nil {
+		pkg.FragmentData.Fragment = []byte("fragment data placeholder")
+	}
+
 	cleanLayer(t, pkg.Layers.Network)
 	cleanLayer(t, pkg.Layers.Control)
 	cleanLayer(t, pkg.Layers.Transport)

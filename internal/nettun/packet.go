@@ -76,9 +76,15 @@ type FragmentData struct {
 
 	// IsLast identifies if it's a last fragment.
 	IsLast bool
+
+	// IsFirst identifies if it's a first fragment.
+	IsFirst bool
 }
 
 type IPData struct {
+	// ID is packet ID.
+	ID uint16
+
 	// Length is packet total length including metadata.
 	Length int
 
@@ -94,9 +100,6 @@ type IPData struct {
 // Packet is parsed IP packet payload.
 type Packet struct {
 	IPData
-
-	// ID is packet ID.
-	ID uint16
 
 	// Source is packet sender address.
 	Source net.Addr
@@ -168,6 +171,7 @@ func ParsePacket(data []byte) (*Packet, error) {
 			l.Network = &ip4
 
 			ipData = IPData{
+				ID:           ip4.Id,
 				Length:       int(ip4.Length),
 				TTL:          uint(ip4.TTL),
 				FragmentData: extractFragmentData(&ip4),
@@ -282,6 +286,7 @@ func extractFragmentData(pkg gopacket.Layer) *FragmentData {
 
 	// If this is a fragment?
 	if ip4.Flags&layers.IPv4MoreFragments != 0 {
+		fragData.IsFirst = ip4.FragOffset == 0
 		return &fragData
 	}
 
