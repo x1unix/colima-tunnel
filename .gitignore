@@ -3,4 +3,5 @@
 /tmp
 /target
 *.env
+.DS_Store
 !example.env
