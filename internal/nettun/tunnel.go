@@ -104,8 +104,6 @@ func (l *Tunnel) listen(ctx context.Context) {
 			return
 		}
 
-		l.log.Debug().Hex("data", rawPacket[:n]).Msg("received raw packet")
-
 		packet, err := ParsePacket(rawPacket[:n])
 		if err != nil {
 			l.log.Err(err).
