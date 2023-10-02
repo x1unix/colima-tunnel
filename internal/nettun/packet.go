@@ -11,6 +11,19 @@ import (
 
 type TransportType uint
 
+func (t TransportType) String() string {
+	switch t {
+	case TCPTransportType:
+		return "TCPTransportType"
+	case UDPTransportType:
+		return "UDPTransportType"
+	case NoTransportType:
+		return "NoTransportType"
+	default:
+		return fmt.Sprintf("TransportType(%d)", t)
+	}
+}
+
 const (
 	NoTransportType TransportType = iota
 	TCPTransportType
@@ -18,6 +31,19 @@ const (
 )
 
 type NetworkType uint
+
+func (t NetworkType) String() string {
+	switch t {
+	case IPv4Network:
+		return "IPv4Network"
+	case IPv6Network:
+		return "IPv6Network"
+	case NoNetwork:
+		return "NoNetwork"
+	default:
+		return fmt.Sprintf("NetworkType(%d)", t)
+	}
+}
 
 const (
 	NoNetwork NetworkType = iota

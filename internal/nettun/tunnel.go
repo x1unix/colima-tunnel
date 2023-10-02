@@ -91,8 +91,8 @@ func (l *Tunnel) listen(ctx context.Context) {
 		}
 
 		// TODO: use bytes pool
-		packet := make([]byte, l.cfg.MTU)
-		n, err := l.iface.Read(packet)
+		rawPacket := make([]byte, l.cfg.MTU)
+		n, err := l.iface.Read(rawPacket)
 		if err != nil {
 			if ctx.Err() != nil {
 				// Just exit immediately if context already canceled
@@ -104,13 +104,28 @@ func (l *Tunnel) listen(ctx context.Context) {
 			return
 		}
 
-		go l.handlePacket(packet[:n])
+		packet, err := ParsePacket(rawPacket[:n])
+		if err != nil {
+			l.log.Err(err).
+				Hex("data", rawPacket[:n]).
+				Msg("failed to parse packet")
+			continue
+		}
+
+		// TODO: Use worker pool instead?
+		go l.handlePacket(packet)
 	}
 }
 
-func (l *Tunnel) handlePacket(packet []byte) {
-	l.log.Debug().Hex("packet", packet).
-		Msg("received packet")
+func (l *Tunnel) handlePacket(packet *Packet) {
+	l.log.Debug().
+		Stringer("src", packet.Source).
+		Stringer("dst", packet.Dest).
+		Stringer("transport", packet.TransportType).
+		Stringer("network", packet.NetworkType).
+		Type("control", packet.Layers.Control).
+		Hex("payload", packet.Payload).
+		Msg("received network packet")
 
 	// As this is a p2p tunnel, we're expecting a IP packet here.
 
