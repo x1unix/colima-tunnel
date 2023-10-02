@@ -151,7 +151,10 @@ func (l *Tunnel) handleFragmentedPacket(packet *Packet) {
 		Msg("received fragmented network packet")
 
 	chunksCount := l.fragBuff.addFragment(packet)
-	if chunksCount == 0 && packet.FragmentData.IsLast {
+	if !packet.FragmentData.IsLast {
+		return
+	}
+	if chunksCount < 2 {
 		// we received only last fragmented packet but didn't receive all previous
 		l.log.Warn().
 			Uint16("id", packet.ID).
