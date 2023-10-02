@@ -149,6 +149,9 @@ func ParsePacket(data []byte) (*Packet, error) {
 		case layers.LayerTypeICMPv6:
 			// src and dest IP is parsed at layer above
 			l.Control = &icmp6
+		case gopacket.LayerTypePayload:
+			// whatever
+			continue
 		default:
 			return nil, fmt.Errorf("unsupported layer type: %s", layerType.String())
 		}
