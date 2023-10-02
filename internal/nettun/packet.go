@@ -154,6 +154,7 @@ func ParsePacket(data []byte) (*Packet, error) {
 			continue
 		default:
 			// TODO: support SCTP?
+			// TODO: support Fragment!!!
 			return nil, fmt.Errorf("unsupported layer type: %s", layerType.String())
 		}
 	}
