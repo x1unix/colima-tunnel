@@ -83,8 +83,9 @@ func TestParsePacket(t *testing.T) {
 				TransportType: TCPTransportType,
 				NetworkType:   IPv4Network,
 				IPData: IPData{
-					Length: 64,
-					TTL:    64,
+					Length:   64,
+					TTL:      64,
+					Protocol: layers.IPProtocolUDP,
 				},
 				Layers: Layers{
 					Transport: &layers.TCP{
@@ -125,9 +126,10 @@ func TestParsePacket(t *testing.T) {
 				},
 				NetworkType: IPv4Network,
 				IPData: IPData{
-					ID:     0xd933,
-					Length: 1500,
-					TTL:    64,
+					ID:       0xd933,
+					Length:   1500,
+					TTL:      64,
+					Protocol: layers.IPProtocolUDP,
 					FragmentData: &FragmentData{
 						FragmentOffset: 0,
 						IsFirst:        true,
@@ -163,9 +165,10 @@ func TestParsePacket(t *testing.T) {
 				},
 				NetworkType: IPv4Network,
 				IPData: IPData{
-					ID:     0xd933,
-					Length: 88,
-					TTL:    64,
+					ID:       0xd933,
+					Length:   88,
+					TTL:      64,
+					Protocol: layers.IPProtocolUDP,
 					FragmentData: &FragmentData{
 						FragmentOffset: 4440,
 						IsLast:         true,

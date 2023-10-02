@@ -25,15 +25,17 @@ type Tunnel struct {
 	netMgr      platform.NetworkManager
 	ctx         context.Context
 	cancelFn    context.CancelFunc
+	fragBuff    fragmentBuffer
 }
 
 func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 	logger := log.With().Str("context", "listener").Logger()
 
 	return &Tunnel{
-		log:    logger,
-		cfg:    cfg,
-		netMgr: platform.GetNetworkManager(log),
+		log:      logger,
+		cfg:      cfg,
+		fragBuff: newFragmentBuffer(),
+		netMgr:   platform.GetNetworkManager(log),
 	}
 }
 
@@ -114,6 +116,10 @@ func (l *Tunnel) listen(ctx context.Context) {
 			continue
 		}
 
+		if packet.IsFragmented() {
+
+		}
+
 		// TODO: Use worker pool instead?
 		go l.handlePacket(packet)
 	}
@@ -132,6 +138,29 @@ func (l *Tunnel) handlePacket(packet *Packet) {
 
 	// As this is a p2p tunnel, we're expecting a IP packet here.
 
+}
+
+func (l *Tunnel) handleFragmentedPacket(packet *Packet) {
+	l.log.Debug().
+		Stringer("src", packet.Source).
+		Stringer("dst", packet.Dest).
+		Stringer("network", packet.NetworkType).
+		Bool("is_first", packet.FragmentData.IsFirst).
+		Bool("is_last", packet.FragmentData.IsLast).
+		Int("offset", packet.FragmentData.FragmentOffset).
+		Msg("received fragmented network packet")
+
+	chunksCount := l.fragBuff.addFragment(packet)
+	if chunksCount == 0 && packet.FragmentData.IsLast {
+		// we received only last fragmented packet but didn't receive all previous
+		l.log.Warn().
+			Uint16("id", packet.ID).
+			Stringer("src", packet.Source).
+			Stringer("dst", packet.Dest).
+			Stringer("proto", packet.Protocol).
+			Int("offset", packet.FragmentData.FragmentOffset).
+			Msg("missing previous packet fragments")
+	}
 }
 
 func (l *Tunnel) closeInterface() {

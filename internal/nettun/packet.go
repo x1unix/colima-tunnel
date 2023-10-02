@@ -91,6 +91,11 @@ type IPData struct {
 	// TTL is max packet hop count.
 	TTL uint
 
+	// Protocol identifies inner layer protocol.
+	//
+	// For IPv6 it keeps value of NextHeader value.
+	Protocol layers.IPProtocol
+
 	// FragmentData contains fragment information.
 	//
 	// Nil when packet is not fragmented.
@@ -169,11 +174,11 @@ func ParsePacket(data []byte) (*Packet, error) {
 			dstIP = ip4.DstIP
 			netType = IPv4Network
 			l.Network = &ip4
-
 			ipData = IPData{
 				ID:           ip4.Id,
 				Length:       int(ip4.Length),
 				TTL:          uint(ip4.TTL),
+				Protocol:     ip4.Protocol,
 				FragmentData: extractFragmentData(&ip4),
 			}
 		case layers.LayerTypeIPv6:
@@ -182,6 +187,7 @@ func ParsePacket(data []byte) (*Packet, error) {
 			netType = IPv6Network
 			l.Network = &ip6
 			ipData = IPData{
+				Protocol:     ip6.NextHeader,
 				Length:       int(ip6.Length),
 				TTL:          uint(ip6.HopLimit),
 				FragmentData: extractFragmentData(&ip4),
