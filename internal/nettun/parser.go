@@ -68,7 +68,7 @@ func parseIPv6Header(data []byte) (*IPHeader, []byte, error) {
 		SrcIP:        ip6.SrcIP,
 		DstIP:        ip6.DstIP,
 		Length:       int(ip6.Length),
-		TTL:          uint(ip6.HopLimit),
+		HopLimit:     uint(ip6.HopLimit),
 		Protocol:     ip6.NextHeader,
 		RawHeader:    ip6,
 		FragmentData: extractFragmentData(ip6),
@@ -87,14 +87,14 @@ func parseIPv4Header(data []byte) (*IPHeader, []byte, error) {
 		DstIP:        ip4.DstIP,
 		ID:           uint32(ip4.Id),
 		Length:       int(ip4.Length),
-		TTL:          uint(ip4.TTL),
+		HopLimit:     uint(ip4.TTL),
 		Protocol:     ip4.Protocol,
 		RawHeader:    ip4,
 		FragmentData: extractFragmentData(ip4),
 	}, ip4.LayerPayload(), nil
 }
 
-func parseProtocolPayload(data []byte, ipData *IPHeader) (*Packet, error) {
+func parseProtocolPayload(ipData *IPHeader, data []byte) (*Packet, error) {
 	ipProto := ipData.Protocol
 	decoder, ok := protoDecoders[ipProto]
 	if !ok {
@@ -189,6 +189,7 @@ func extractFragmentData(pkg gopacket.Layer) *FragmentData {
 
 	fragData := FragmentData{
 		FragmentOffset: int(ip4.FragOffset * 8),
+		Fragment:       pkg.LayerPayload(),
 	}
 
 	// If this is a fragment?
