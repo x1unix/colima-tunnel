@@ -106,8 +106,6 @@ func (tun *Tunnel) listen(ctx context.Context) {
 			return
 		}
 
-		tun.log.Debug().Hex("data", rawPacket[:n]).Msg("received raw packet")
-
 		packet, err := ParsePacket(rawPacket[:n])
 		if err != nil {
 			tun.log.Err(err).
@@ -131,7 +129,6 @@ func (tun *Tunnel) handlePacket(packet *Packet) {
 		Stringer("dst", packet.Dest).
 		Stringer("protocol", packet.Protocol).
 		Uint8("ip_ver", packet.Version).
-		Bool("fragmented", packet.IsFragmented()).
 		Hex("payload", packet.Payload).
 		Msg("received network packet")
 
@@ -166,7 +163,7 @@ func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
 		return
 	}
 
-	assembledPacket, err := ParsePacket(data)
+	assembledPacket, err := ParsePacketWithHeader(packet.IPHeader, data)
 	if err != nil {
 		tun.log.Err(err).
 			Uint32("id", packet.ID).
