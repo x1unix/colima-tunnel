@@ -1,8 +1,10 @@
 package nettun
 
 import (
+	"bytes"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/google/gopacket"
@@ -49,23 +51,94 @@ func TestSplitAddr(t *testing.T) {
 	}
 }
 
-func fileSource(fname string) func(t *testing.T) []byte {
-	return func(t *testing.T) []byte {
-		t.Helper()
-		data, err := os.ReadFile(fname)
-		require.NoError(t, err, "failed to open file:", fname)
-		return data
+func TestParsePacketWithHeader(t *testing.T) {
+	files := []string{
+		"udp-frag-1.bin",
+		"udp-frag-2.bin",
+		"udp-frag-3.bin",
+		"udp-frag-fin.bin",
 	}
+
+	var (
+		header  IPHeader
+		payload []byte
+	)
+
+	fragbuf := newFragmentBuffer()
+	for i, fname := range files {
+		isLast := i == len(files)-1
+		data := readFile(t, filepath.Join("testdata", fname))
+		packet, err := ParsePacket(data)
+		require.NoErrorf(t, err, "failed to parse fragment %s", fname)
+		if isLast {
+			b, err := fragbuf.assemblyFragments(packet)
+			require.NoError(t, err, "failed to assembly fragments")
+			header = packet.IPHeader
+			payload = b
+			break
+		}
+
+		fragbuf.addFragment(packet)
+	}
+
+	expect := &Packet{
+		Source: &net.UDPAddr{
+			IP:   net.IP{100, 64, 0, 10},
+			Port: 55387,
+		},
+		Dest: &net.UDPAddr{
+			IP:   net.IP{10, 20, 0, 10},
+			Port: 5344,
+		},
+		IPHeader: IPHeader{
+			Version:   4,
+			ID:        0xd933,
+			Length:    4528,
+			HopLimit:  64,
+			SrcIP:     net.IP{100, 64, 0, 10},
+			DstIP:     net.IP{10, 20, 0, 10},
+			Protocol:  layers.IPProtocolUDP,
+			RawHeader: header.RawHeader,
+		},
+		Layers: Layers{
+			UDP: &layers.UDP{
+				BaseLayer: layers.BaseLayer{
+					Payload:  payload[8:],
+					Contents: payload[:8],
+				},
+				SrcPort:  55387,
+				DstPort:  5344,
+				Length:   4508,
+				Checksum: 0x9f30,
+			},
+		},
+		Payload: bytes.Repeat([]byte{'a'}, 4500),
+	}
+
+	result, err := ParsePacketWithHeader(header, payload)
+	require.NoError(t, err, "ParsePacketWithHeader error")
+
+	// truncate private variables in obtained value
+	oldUDP := *result.Layers.UDP
+	result.Layers.UDP = &layers.UDP{
+		BaseLayer: oldUDP.BaseLayer,
+		SrcPort:   oldUDP.SrcPort,
+		DstPort:   oldUDP.DstPort,
+		Length:    oldUDP.Length,
+		Checksum:  oldUDP.Checksum,
+	}
+
+	require.Equal(t, expect, result)
 }
 
 func TestParsePacket(t *testing.T) {
 	cases := map[string]struct {
-		src       func(t *testing.T) []byte
+		src       string
 		expect    *Packet
 		expectErr string
 	}{
 		"TCP SYN": {
-			src: fileSource("testdata/tcp-syn.bin"),
+			src: "testdata/tcp-syn.bin",
 			expect: &Packet{
 				Source: &net.TCPAddr{
 					IP:   net.IP{100, 64, 0, 10},
@@ -77,7 +150,7 @@ func TestParsePacket(t *testing.T) {
 				},
 				IPHeader: IPHeader{
 					Length:   64,
-					TTL:      64,
+					HopLimit: 64,
 					Version:  4,
 					Protocol: layers.IPProtocolTCP,
 					SrcIP:    net.IP{100, 64, 0, 10},
@@ -113,7 +186,7 @@ func TestParsePacket(t *testing.T) {
 			},
 		},
 		"UDP first fragment": {
-			src: fileSource("testdata/udp-frag-1.bin"),
+			src: "testdata/udp-frag-1.bin",
 			expect: &Packet{
 				Source: &net.IPAddr{
 					IP: net.IP{100, 64, 0, 10},
@@ -125,7 +198,7 @@ func TestParsePacket(t *testing.T) {
 					Version:  4,
 					ID:       0xd933,
 					Length:   1500,
-					TTL:      64,
+					HopLimit: 64,
 					SrcIP:    net.IP{100, 64, 0, 10},
 					DstIP:    net.IP{10, 20, 0, 10},
 					Protocol: layers.IPProtocolUDP,
@@ -152,7 +225,7 @@ func TestParsePacket(t *testing.T) {
 			},
 		},
 		"UDP final fragment": {
-			src: fileSource("testdata/udp-frag-fin.bin"),
+			src: "testdata/udp-frag-fin.bin",
 			expect: &Packet{
 				Source: &net.IPAddr{
 					IP: net.IP{100, 64, 0, 10},
@@ -164,7 +237,7 @@ func TestParsePacket(t *testing.T) {
 					Version:  4,
 					ID:       0xd933,
 					Length:   88,
-					TTL:      64,
+					HopLimit: 64,
 					SrcIP:    net.IP{100, 64, 0, 10},
 					DstIP:    net.IP{10, 20, 0, 10},
 					Protocol: layers.IPProtocolUDP,
@@ -190,7 +263,7 @@ func TestParsePacket(t *testing.T) {
 			},
 		},
 		"ICMP IPv6": {
-			src: fileSource("testdata/ipv6-icmp.bin"),
+			src: "testdata/ipv6-icmp.bin",
 			expect: &Packet{
 				Source: &net.IPAddr{
 					IP: net.ParseIP("2001:db8:1::1"),
@@ -200,7 +273,7 @@ func TestParsePacket(t *testing.T) {
 				},
 				IPHeader: IPHeader{
 					Length:   16,
-					TTL:      64,
+					HopLimit: 64,
 					Version:  6,
 					ID:       295493,
 					Protocol: layers.IPProtocolICMPv6,
@@ -233,15 +306,15 @@ func TestParsePacket(t *testing.T) {
 			},
 		},
 		"invalid packet": {
-			src:       fileSource("testdata/badpacket.bin"),
+			src:       "testdata/badpacket.bin",
 			expectErr: "failed to parse IP header: invalid version in IP header",
 		},
 	}
 
 	for n, c := range cases {
 		t.Run(n, func(t *testing.T) {
-			src := c.src(t)
-			got, err := ParsePacket(src)
+			data := readFile(t, c.src)
+			got, err := ParsePacket(data)
 			if c.expectErr != "" {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), c.expectErr)
@@ -264,13 +337,13 @@ func sanitizeIncomparable(t *testing.T, pkg *Packet) {
 
 	pkg.SrcIP = trimIPBytes(pkg.SrcIP)
 	pkg.DstIP = trimIPBytes(pkg.DstIP)
-	cleanLayer(t, pkg.Layers.TCP)
-	cleanLayer(t, pkg.Layers.UDP)
-	cleanLayer(t, pkg.Layers.ICMP)
-	cleanLayer(t, pkg.RawHeader)
+	cleanLayer(pkg.Layers.TCP)
+	cleanLayer(pkg.Layers.UDP)
+	cleanLayer(pkg.Layers.ICMP)
+	cleanLayer(pkg.RawHeader)
 }
 
-func cleanLayer(t *testing.T, l gopacket.Layer) {
+func cleanLayer(l gopacket.Layer) {
 	if l == nil {
 		return
 	}
@@ -334,4 +407,11 @@ func cleanLayer(t *testing.T, l gopacket.Layer) {
 func trimIPBytes(src net.IP) net.IP {
 	// although IP address strings are equal, but byte contents are different
 	return net.ParseIP(src.String())
+}
+
+func readFile(t *testing.T, fname string) []byte {
+	t.Helper()
+	data, err := os.ReadFile(fname)
+	require.NoError(t, err, "failed to open file:", fname)
+	return data
 }

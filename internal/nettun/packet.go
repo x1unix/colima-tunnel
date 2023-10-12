@@ -46,8 +46,8 @@ type IPHeader struct {
 	// Length is packet total length including metadata.
 	Length int
 
-	// TTL is max packet hop count.
-	TTL uint
+	// HopLimit is max packet hop count.
+	HopLimit uint
 
 	// Protocol identifies inner layer protocol.
 	//
@@ -103,12 +103,27 @@ func ParsePacket(data []byte) (*Packet, error) {
 		}, nil
 	}
 
-	packet, err := parseProtocolPayload(payload, header)
+	packet, err := parseProtocolPayload(header, payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse IP packet contents: %w", err)
 	}
 
 	return packet, nil
+}
+
+// ParsePacketWithHeader constructs a new packet with passed IP header and parsed payload.
+//
+// Payload is TCP/UDP or other transport layer payload.
+func ParsePacketWithHeader(header IPHeader, payload []byte) (*Packet, error) {
+	headerSize := 0
+	if rawHeader := header.RawHeader; rawHeader != nil {
+		headerSize = len(rawHeader.LayerContents())
+	}
+
+	header.FragmentData = nil
+	header.Length = headerSize + len(payload)
+
+	return parseProtocolPayload(&header, payload)
 }
 
 // SplitAddr extracts IP address and port from net.Addr.
