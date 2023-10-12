@@ -1,10 +1,12 @@
 package nettun
 
 import (
+	"errors"
 	"net"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/x1unix/colima-nat-tun/internal/util/typeutil"
 )
 
 const fragmentChunkBufferSize = 10
@@ -16,34 +18,27 @@ type ipBytes [16]byte
 
 // fragKey is packet fragment identification key.
 type fragKey struct {
+	id    uint32
 	ipVer uint8
 	proto layers.IPProtocol
-	id    uint16
 	srcIP ipBytes
 	dstIP ipBytes
 }
 
-// fragKeyFromPacket constructs fragment key from packet.
-func fragKeyFromPacket(p *Packet) fragKey {
-	var ipVer uint8 = 4
-	if p.NetworkType == IPv6Network {
-		ipVer = 6
-	}
-
+// fragKeyFromHeader constructs fragment key from packet.
+func fragKeyFromHeader(header IPHeader) fragKey {
 	return fragKey{
-		id:    p.ID,
-		ipVer: ipVer,
-		srcIP: ipBytesFromAddr(p.Source),
-		dstIP: ipBytesFromAddr(p.Dest),
-		proto: p.Protocol,
+		id:    header.ID,
+		ipVer: header.Version,
+		srcIP: ipBytesFromAddr(header.SrcIP),
+		dstIP: ipBytesFromAddr(header.DstIP),
+		proto: header.Protocol,
 	}
 }
 
-func ipBytesFromAddr(addr net.Addr) ipBytes {
-	ipAddr, _ := SplitAddr(addr)
-
+func ipBytesFromAddr(addr net.IP) ipBytes {
 	var result ipBytes
-	copy(result[:], ipAddr)
+	copy(result[:], addr)
 	return result
 }
 
@@ -63,7 +58,7 @@ func newFragmentBuffer() fragmentBuffer {
 }
 
 func (buff fragmentBuffer) addFragment(p *Packet) int {
-	key := fragKeyFromPacket(p)
+	key := fragKeyFromHeader(p.IPHeader)
 
 	arr, ok := buff.chunks[key]
 	if !ok {
@@ -79,6 +74,35 @@ func (buff fragmentBuffer) addFragment(p *Packet) int {
 	return len(arr)
 }
 
-func (buff fragmentBuffer) collectFragments(p *Packet) {
+// assemblyFragments assembles packet payload from previously received fragments and passed final fragment.
+//
+// Receives a final IP fragment packet and assembles all previously received fragments together.
+func (buff fragmentBuffer) assemblyFragments(p *Packet) ([]byte, error) {
+	if p.FragmentData == nil || !p.FragmentData.IsLast {
+		return nil, errors.New("passed packet is not last fragment")
+	}
 
+	key := fragKeyFromHeader(p.IPHeader)
+	chunks, ok := buff.chunks[key]
+	if !ok {
+		return nil, errors.New("missing previous fragments for package")
+	}
+
+	defer delete(buff.chunks, key)
+	chunks = append(chunks, chunk{
+		offset:  p.FragmentData.FragmentOffset,
+		payload: p.FragmentData.Fragment,
+	})
+
+	typeutil.Sort(chunks, func(a, b chunk) bool {
+		return a.offset < b.offset
+	})
+
+	totalLen := p.FragmentData.FragmentOffset + len(p.FragmentData.Fragment)
+	data := make([]byte, 0, totalLen)
+	for _, frag := range chunks {
+		data = append(data, frag.payload...)
+	}
+
+	return data, nil
 }

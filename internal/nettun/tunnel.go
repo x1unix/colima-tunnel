@@ -40,16 +40,16 @@ func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
 }
 
 // Name returns tunnel interface name.
-func (l *Tunnel) Name() string {
-	if l == nil {
+func (tun *Tunnel) Name() string {
+	if tun == nil {
 		return ""
 	}
 
-	return l.iface.Name()
+	return tun.iface.Name()
 }
 
 // Start starts network tunnel.
-func (l *Tunnel) Start(ctx context.Context) error {
+func (tun *Tunnel) Start(ctx context.Context) error {
 	iface, err := water.New(water.Config{
 		DeviceType: water.TUN,
 	})
@@ -57,34 +57,34 @@ func (l *Tunnel) Start(ctx context.Context) error {
 		return fmt.Errorf("failed to create tunnel: %w", err)
 	}
 
-	l.iface = iface
-	l.log.Info().
+	tun.iface = iface
+	tun.log.Info().
 		Str("tun", iface.Name()).
 		Msgf("started TUN interface: %s", iface.Name())
-	if err := l.configureTunnel(ctx); err != nil {
+	if err := tun.configureTunnel(ctx); err != nil {
 		return err
 	}
 
-	l.ctx, l.cancelFn = context.WithCancel(ctx)
-	l.listen(l.ctx)
+	tun.ctx, tun.cancelFn = context.WithCancel(ctx)
+	tun.listen(tun.ctx)
 	return nil
 }
 
-func (l *Tunnel) Close() error {
-	if l.cancelFn == nil {
+func (tun *Tunnel) Close() error {
+	if tun.cancelFn == nil {
 		return errors.New("listener already closed")
 	}
 
-	l.cancelFn()
-	l.closeInterface()
-	l.cancelFn = nil
+	tun.cancelFn()
+	tun.closeInterface()
+	tun.cancelFn = nil
 	return nil
 }
 
-func (l *Tunnel) listen(ctx context.Context) {
-	defer l.closeInterface()
+func (tun *Tunnel) listen(ctx context.Context) {
+	defer tun.closeInterface()
 
-	l.isListening.Store(true)
+	tun.isListening.Store(true)
 	for {
 		select {
 		case <-ctx.Done():
@@ -93,121 +93,146 @@ func (l *Tunnel) listen(ctx context.Context) {
 		}
 
 		// TODO: use bytes pool
-		rawPacket := make([]byte, l.cfg.MTU)
-		n, err := l.iface.Read(rawPacket)
+		rawPacket := make([]byte, tun.cfg.MTU)
+		n, err := tun.iface.Read(rawPacket)
 		if err != nil {
 			if ctx.Err() != nil {
 				// Just exit immediately if context already canceled
 				return
 			}
 
-			_ = l.iface.Close()
-			l.log.Fatal().Err(err).Msg("failed to read packet")
+			_ = tun.iface.Close()
+			tun.log.Fatal().Err(err).Msg("failed to read packet")
 			return
 		}
 
-		l.log.Debug().Hex("data", rawPacket[:n]).Msg("received raw packet")
+		tun.log.Debug().Hex("data", rawPacket[:n]).Msg("received raw packet")
 
 		packet, err := ParsePacket(rawPacket[:n])
 		if err != nil {
-			l.log.Err(err).
+			tun.log.Err(err).
 				Hex("data", rawPacket[:n]).
 				Msg("failed to parse packet")
 			continue
 		}
 
 		if packet.IsFragmented() {
-
+			tun.handleFragmentedPacket(packet)
 		}
 
 		// TODO: Use worker pool instead?
-		go l.handlePacket(packet)
+		go tun.handlePacket(packet)
 	}
 }
 
-func (l *Tunnel) handlePacket(packet *Packet) {
-	l.log.Debug().
+func (tun *Tunnel) handlePacket(packet *Packet) {
+	tun.log.Debug().
 		Stringer("src", packet.Source).
 		Stringer("dst", packet.Dest).
-		Stringer("transport", packet.TransportType).
-		Stringer("network", packet.NetworkType).
+		Stringer("protocol", packet.Protocol).
+		Uint8("ip_ver", packet.Version).
 		Bool("fragmented", packet.IsFragmented()).
-		Type("control", packet.Layers.Control).
 		Hex("payload", packet.Payload).
 		Msg("received network packet")
 
-	// As this is a p2p tunnel, we're expecting a IP packet here.
-
 }
 
-func (l *Tunnel) handleFragmentedPacket(packet *Packet) {
-	l.log.Debug().
+func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
+	tun.log.Debug().
 		Stringer("src", packet.Source).
 		Stringer("dst", packet.Dest).
-		Stringer("network", packet.NetworkType).
+		Stringer("protocol", packet.Protocol).
+		Uint8("ip_ver", packet.Version).
 		Bool("is_first", packet.FragmentData.IsFirst).
 		Bool("is_last", packet.FragmentData.IsLast).
+		Hex("fragment", packet.FragmentData.Fragment).
 		Int("offset", packet.FragmentData.FragmentOffset).
 		Msg("received fragmented network packet")
 
-	chunksCount := l.fragBuff.addFragment(packet)
 	if !packet.FragmentData.IsLast {
+		tun.fragBuff.addFragment(packet)
 		return
 	}
-	if chunksCount < 2 {
-		// we received only last fragmented packet but didn't receive all previous
-		l.log.Warn().
-			Uint16("id", packet.ID).
+
+	data, err := tun.fragBuff.assemblyFragments(packet)
+	if err != nil {
+		tun.log.Err(err).
+			Uint32("id", packet.ID).
 			Stringer("src", packet.Source).
 			Stringer("dst", packet.Dest).
 			Stringer("proto", packet.Protocol).
 			Int("offset", packet.FragmentData.FragmentOffset).
-			Msg("missing previous packet fragments")
-	}
-}
-
-func (l *Tunnel) closeInterface() {
-	if !l.isListening.Load() {
-		l.log.Debug().Msg("listener already closed, skip close")
+			Msg("failed to get packet fragments")
 		return
 	}
 
-	l.isListening.Store(false)
-	l.log.Info().Str("iface", l.iface.Name()).
+	assembledPacket, err := ParsePacket(data)
+	if err != nil {
+		tun.log.Err(err).
+			Uint32("id", packet.ID).
+			Stringer("src", packet.Source).
+			Stringer("dst", packet.Dest).
+			Stringer("proto", packet.Protocol).
+			Hex("data", data).
+			Int("offset", packet.FragmentData.FragmentOffset).
+			Msg("failed to assembly packet from fragments")
+		return
+	}
+
+	tun.log.Debug().
+		Uint32("id", packet.ID).
+		Stringer("src", packet.Source).
+		Stringer("dst", packet.Dest).
+		Stringer("proto", packet.Protocol).
+		Int("offset", packet.FragmentData.FragmentOffset).
+		Msg("successfully assembled packet")
+
+	// TODO: Use worker pool instead?
+	go tun.handlePacket(assembledPacket)
+}
+
+func (tun *Tunnel) closeInterface() {
+	if !tun.isListening.Load() {
+		tun.log.Debug().Msg("listener already closed, skip close")
+		return
+	}
+
+	tun.isListening.Store(false)
+	tun.log.Info().Str("iface", tun.iface.Name()).
 		Msg("closing the tunnel interface...")
 
-	if err := l.iface.Close(); err != nil {
-		l.log.Warn().Err(err).Str("iface", l.iface.Name()).
+	if err := tun.iface.Close(); err != nil {
+		tun.log.Warn().Err(err).Str("iface", tun.iface.Name()).
 			Msg("failed to close the tunnel")
 		return
 	}
 
-	l.log.Debug().Str("iface", l.iface.Name()).
+	tun.log.Debug().Str("iface", tun.iface.Name()).
 		Msg("tunnel closed successfully")
 }
 
-func (l *Tunnel) configureTunnel(ctx context.Context) error {
-	ifaceName := l.iface.Name()
+func (tun *Tunnel) configureTunnel(ctx context.Context) error {
+	ifaceName := tun.iface.Name()
 
-	l.log.Info().
+	tun.log.Info().
 		Str("tun", ifaceName).
-		IPAddr("client_ip", l.cfg.ClientIP).
-		IPAddr("gateway_ip", l.cfg.GatewayIP).
-		IPPrefix("net", *l.cfg.Network).
+		IPAddr("client_ip", tun.cfg.ClientIP).
+		IPAddr("gateway_ip", tun.cfg.GatewayIP).
+		IPPrefix("net", *tun.cfg.Network).
 		Msg("assigning IP address...")
 
-	err := l.netMgr.SetInterfaceAddress(
-		ctx, l.iface.Name(), l.cfg.ClientIP, l.cfg.GatewayIP,
+	err := tun.netMgr.SetInterfaceAddress(
+		ctx, tun.iface.Name(), tun.cfg.ClientIP, tun.cfg.GatewayIP,
 	)
 	if err != nil {
 		return fmt.Errorf("failed to configure tunnel IP address: %w", err)
 	}
 
-	l.log.Debug().
+	tun.log.Debug().
 		Str("tun", ifaceName).
-		Uint("mtu", l.cfg.MTU).
+		Uint("mtu", tun.cfg.MTU).
 		Msg("updating interface MTU...")
-	err = l.netMgr.SetInterfaceMTU(ctx, l.iface.Name(), l.cfg.MTU)
+	err = tun.netMgr.SetInterfaceMTU(ctx, tun.iface.Name(), tun.cfg.MTU)
 	if err != nil {
 		return fmt.Errorf("failed to set MTU: %w", err)
 	}
