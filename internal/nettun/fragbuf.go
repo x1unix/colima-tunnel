@@ -2,8 +2,6 @@ package nettun
 
 import (
 	"errors"
-	"net"
-
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/x1unix/colima-nat-tun/internal/util/typeutil"
@@ -14,7 +12,7 @@ const fragmentChunkBufferSize = 10
 // ipBytes is fixed size array that holds IP address.
 //
 // Supports both v4 and v6 addresses.
-type ipBytes [16]byte
+type ipBytes = [16]byte
 
 // fragKey is packet fragment identification key.
 type fragKey struct {
@@ -30,16 +28,10 @@ func fragKeyFromHeader(header IPHeader) fragKey {
 	return fragKey{
 		id:    header.ID,
 		ipVer: header.Version,
-		srcIP: ipBytesFromAddr(header.SrcIP),
-		dstIP: ipBytesFromAddr(header.DstIP),
+		srcIP: header.SrcIP.As16(),
+		dstIP: header.DstIP.As16(),
 		proto: header.Protocol,
 	}
-}
-
-func ipBytesFromAddr(addr net.IP) ipBytes {
-	var result ipBytes
-	copy(result[:], addr)
-	return result
 }
 
 type chunk struct {

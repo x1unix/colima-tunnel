@@ -3,6 +3,7 @@ package nettun
 import (
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -38,10 +39,10 @@ type IPHeader struct {
 	Version uint8
 
 	// SourceIP is sender IP address.
-	SrcIP net.IP
+	SrcIP netip.Addr
 
 	// DstIP is destination IP address.
-	DstIP net.IP
+	DstIP netip.Addr
 
 	// Length is packet total length including metadata.
 	Length int
@@ -98,8 +99,8 @@ func ParsePacket(data []byte) (*Packet, error) {
 		// TODO: extract zone for IPv6 packets
 		return &Packet{
 			IPHeader: *header,
-			Source:   &net.IPAddr{IP: header.SrcIP},
-			Dest:     &net.IPAddr{IP: header.DstIP},
+			Source:   &net.IPAddr{IP: header.SrcIP.AsSlice()},
+			Dest:     &net.IPAddr{IP: header.DstIP.AsSlice()},
 		}, nil
 	}
 

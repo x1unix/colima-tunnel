@@ -3,6 +3,7 @@ package nettun
 import (
 	"bytes"
 	"net"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"testing"
@@ -95,8 +96,8 @@ func TestParsePacketWithHeader(t *testing.T) {
 			ID:        0xd933,
 			Length:    4528,
 			HopLimit:  64,
-			SrcIP:     net.IP{100, 64, 0, 10},
-			DstIP:     net.IP{10, 20, 0, 10},
+			SrcIP:     newNetIP(t, 100, 64, 0, 10),
+			DstIP:     newNetIP(t, 10, 20, 0, 10),
 			Protocol:  layers.IPProtocolUDP,
 			RawHeader: header.RawHeader,
 		},
@@ -153,8 +154,8 @@ func TestParsePacket(t *testing.T) {
 					HopLimit: 64,
 					Version:  4,
 					Protocol: layers.IPProtocolTCP,
-					SrcIP:    net.IP{100, 64, 0, 10},
-					DstIP:    net.IP{100, 64, 0, 254},
+					SrcIP:    newNetIP(t, 100, 64, 0, 10),
+					DstIP:    newNetIP(t, 100, 64, 0, 254),
 					RawHeader: &layers.IPv4{
 						Version:    4,
 						IHL:        5,
@@ -199,8 +200,8 @@ func TestParsePacket(t *testing.T) {
 					ID:       0xd933,
 					Length:   1500,
 					HopLimit: 64,
-					SrcIP:    net.IP{100, 64, 0, 10},
-					DstIP:    net.IP{10, 20, 0, 10},
+					SrcIP:    newNetIP(t, 100, 64, 0, 10),
+					DstIP:    newNetIP(t, 10, 20, 0, 10),
 					Protocol: layers.IPProtocolUDP,
 					FragmentData: &FragmentData{
 						FragmentOffset: 0,
@@ -238,8 +239,8 @@ func TestParsePacket(t *testing.T) {
 					ID:       0xd933,
 					Length:   88,
 					HopLimit: 64,
-					SrcIP:    net.IP{100, 64, 0, 10},
-					DstIP:    net.IP{10, 20, 0, 10},
+					SrcIP:    newNetIP(t, 100, 64, 0, 10),
+					DstIP:    newNetIP(t, 10, 20, 0, 10),
 					Protocol: layers.IPProtocolUDP,
 					FragmentData: &FragmentData{
 						FragmentOffset: 4440,
@@ -277,8 +278,8 @@ func TestParsePacket(t *testing.T) {
 					Version:  6,
 					ID:       295493,
 					Protocol: layers.IPProtocolICMPv6,
-					SrcIP:    net.ParseIP("2001:db8:1::1"),
-					DstIP:    net.ParseIP("2001:db8:2::2"),
+					SrcIP:    netip.MustParseAddr("2001:db8:1::1"),
+					DstIP:    netip.MustParseAddr("2001:db8:2::2"),
 					RawHeader: &layers.IPv6{
 						Version:    6,
 						Length:     16,
@@ -335,8 +336,8 @@ func sanitizeIncomparable(t *testing.T, pkg *Packet) {
 		pkg.FragmentData.Fragment = []byte("fragment data placeholder")
 	}
 
-	pkg.SrcIP = trimIPBytes(pkg.SrcIP)
-	pkg.DstIP = trimIPBytes(pkg.DstIP)
+	pkg.SrcIP = trimIPNet(t, pkg.SrcIP)
+	pkg.DstIP = trimIPNet(t, pkg.DstIP)
 	cleanLayer(pkg.Layers.TCP)
 	cleanLayer(pkg.Layers.UDP)
 	cleanLayer(pkg.Layers.ICMP)
@@ -409,9 +410,27 @@ func trimIPBytes(src net.IP) net.IP {
 	return net.ParseIP(src.String())
 }
 
+func trimIPNet(t *testing.T, src netip.Addr) netip.Addr {
+	v, ok := netip.AddrFromSlice(trimIPBytes(src.AsSlice()))
+	if !ok {
+		t.Fatal("trimIPNet: invalid addr")
+	}
+
+	return v
+}
+
 func readFile(t *testing.T, fname string) []byte {
 	t.Helper()
 	data, err := os.ReadFile(fname)
 	require.NoError(t, err, "failed to open file:", fname)
 	return data
+}
+
+func newNetIP(t *testing.T, parts ...byte) netip.Addr {
+	v, ok := netip.AddrFromSlice(parts)
+	if !ok {
+		t.Fatalf("netip.AddrFromSlice: invalid addr %v", parts)
+	}
+
+	return v
 }

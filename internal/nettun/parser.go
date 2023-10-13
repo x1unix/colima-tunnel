@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"net/netip"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
@@ -61,12 +62,15 @@ func parseIPv6Header(data []byte) (*IPHeader, []byte, error) {
 		return nil, nil, err
 	}
 
+	srcIP, _ := netip.AddrFromSlice(ip6.SrcIP)
+	dstIP, _ := netip.AddrFromSlice(ip6.DstIP)
+
 	return &IPHeader{
 		// FIXME: is FlowLabel really packet ID for ipv6?
 		Version:      6,
 		ID:           ip6.FlowLabel,
-		SrcIP:        ip6.SrcIP,
-		DstIP:        ip6.DstIP,
+		SrcIP:        srcIP,
+		DstIP:        dstIP,
 		Length:       int(ip6.Length),
 		HopLimit:     uint(ip6.HopLimit),
 		Protocol:     ip6.NextHeader,
@@ -81,10 +85,13 @@ func parseIPv4Header(data []byte) (*IPHeader, []byte, error) {
 		return nil, nil, err
 	}
 
+	srcIP, _ := netip.AddrFromSlice(ip4.SrcIP)
+	dstIP, _ := netip.AddrFromSlice(ip4.DstIP)
+
 	return &IPHeader{
 		Version:      4,
-		SrcIP:        ip4.SrcIP,
-		DstIP:        ip4.DstIP,
+		SrcIP:        srcIP,
+		DstIP:        dstIP,
 		ID:           uint32(ip4.Id),
 		Length:       int(ip4.Length),
 		HopLimit:     uint(ip4.TTL),
@@ -108,8 +115,8 @@ func parseProtocolPayload(ipData *IPHeader, data []byte) (*Packet, error) {
 	}
 
 	p := &Packet{
-		Source:   &net.IPAddr{IP: ipData.SrcIP},
-		Dest:     &net.IPAddr{IP: ipData.DstIP},
+		Source:   &net.IPAddr{IP: ipData.SrcIP.AsSlice()},
+		Dest:     &net.IPAddr{IP: ipData.DstIP.AsSlice()},
 		IPHeader: *ipData,
 		Payload:  layer.LayerPayload(),
 	}
@@ -129,11 +136,11 @@ func parseTCP(layer gopacket.Layer, ipData *IPHeader, p *Packet) error {
 	}
 
 	p.Source = &net.TCPAddr{
-		IP:   ipData.SrcIP,
+		IP:   ipData.SrcIP.AsSlice(),
 		Port: int(tcp.SrcPort),
 	}
 	p.Dest = &net.TCPAddr{
-		IP:   ipData.DstIP,
+		IP:   ipData.DstIP.AsSlice(),
 		Port: int(tcp.DstPort),
 	}
 
@@ -148,11 +155,11 @@ func parseUDP(layer gopacket.Layer, ipData *IPHeader, p *Packet) error {
 	}
 
 	p.Source = &net.UDPAddr{
-		IP:   ipData.SrcIP,
+		IP:   ipData.SrcIP.AsSlice(),
 		Port: int(udp.SrcPort),
 	}
 	p.Dest = &net.UDPAddr{
-		IP:   ipData.DstIP,
+		IP:   ipData.DstIP.AsSlice(),
 		Port: int(udp.DstPort),
 	}
 
