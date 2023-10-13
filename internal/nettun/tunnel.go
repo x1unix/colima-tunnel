@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"sync/atomic"
 
 	"github.com/rs/zerolog"
@@ -16,6 +17,11 @@ const (
 	minMTU = 576
 )
 
+type PacketHandler interface {
+	// HandlePacket handles incoming packet.
+	HandlePacket(ctx context.Context, packet *Packet, writer io.Writer) error
+}
+
 type Tunnel struct {
 	log zerolog.Logger
 	cfg Config
@@ -26,14 +32,16 @@ type Tunnel struct {
 	ctx         context.Context
 	cancelFn    context.CancelFunc
 	fragBuff    fragmentBuffer
+	handler     PacketHandler
 }
 
-func NewTunnel(log zerolog.Logger, cfg Config) *Tunnel {
+func NewTunnel(log zerolog.Logger, cfg Config, handler PacketHandler) *Tunnel {
 	logger := log.With().Str("context", "listener").Logger()
 
 	return &Tunnel{
 		log:      logger,
 		cfg:      cfg,
+		handler:  handler,
 		fragBuff: newFragmentBuffer(),
 		netMgr:   platform.GetNetworkManager(log),
 	}
@@ -115,26 +123,39 @@ func (tun *Tunnel) listen(ctx context.Context) {
 		}
 
 		if packet.IsFragmented() {
-			tun.handleFragmentedPacket(packet)
+			tun.handleFragmentedPacket(ctx, packet)
 		}
 
 		// TODO: Use worker pool instead?
-		go tun.handlePacket(packet)
+		go tun.handlePacket(ctx, packet)
 	}
 }
 
-func (tun *Tunnel) handlePacket(packet *Packet) {
-	tun.log.Debug().
+func (tun *Tunnel) handlePacket(ctx context.Context, packet *Packet) {
+	packetLogger := tun.log.With().
 		Stringer("src", packet.Source).
 		Stringer("dst", packet.Dest).
 		Stringer("protocol", packet.Protocol).
 		Uint8("ip_ver", packet.Version).
+		Logger()
+
+	defer func() {
+		if r := recover(); r != nil {
+			packetLogger.Err(fmt.Errorf("%s", r)).
+				Msg("packet handler panic!")
+		}
+	}()
+
+	packetLogger.Debug().
 		Hex("payload", packet.Payload).
 		Msg("received network packet")
 
+	if err := tun.handler.HandlePacket(ctx, packet, tun.iface); err != nil {
+		packetLogger.Err(err).Msg("packet handler returned an error")
+	}
 }
 
-func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
+func (tun *Tunnel) handleFragmentedPacket(ctx context.Context, packet *Packet) {
 	tun.log.Debug().
 		Stringer("src", packet.Source).
 		Stringer("dst", packet.Dest).
@@ -157,7 +178,7 @@ func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
 			Uint32("id", packet.ID).
 			Stringer("src", packet.Source).
 			Stringer("dst", packet.Dest).
-			Stringer("proto", packet.Protocol).
+			Stringer("protocol", packet.Protocol).
 			Int("offset", packet.FragmentData.FragmentOffset).
 			Msg("failed to get packet fragments")
 		return
@@ -169,7 +190,7 @@ func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
 			Uint32("id", packet.ID).
 			Stringer("src", packet.Source).
 			Stringer("dst", packet.Dest).
-			Stringer("proto", packet.Protocol).
+			Stringer("protocol", packet.Protocol).
 			Hex("data", data).
 			Int("offset", packet.FragmentData.FragmentOffset).
 			Msg("failed to assembly packet from fragments")
@@ -185,7 +206,7 @@ func (tun *Tunnel) handleFragmentedPacket(packet *Packet) {
 		Msg("successfully assembled packet")
 
 	// TODO: Use worker pool instead?
-	go tun.handlePacket(assembledPacket)
+	go tun.handlePacket(ctx, assembledPacket)
 }
 
 func (tun *Tunnel) closeInterface() {

@@ -24,12 +24,12 @@ func NewContainerStatusListener(log zerolog.Logger) *ContainerStatusListener {
 	return &ContainerStatusListener{
 		log:   log.With().Str("context", "container").Logger(),
 		lock:  new(sync.Mutex),
-		addrs: set.New[netip.Addr](0),
+		addrs: set.New[netip.Addr](10),
 	}
 }
 
-// IsAddressReachable returns whether any container with passed IP address is running.
-func (listener ContainerStatusListener) IsAddressReachable(addr netip.Addr) bool {
+// Ping returns whether any container with passed IP address is reachable.
+func (listener ContainerStatusListener) Ping(addr netip.Addr) bool {
 	listener.lock.Lock()
 	defer listener.lock.Unlock()
 	return listener.addrs.Contains(addr)
@@ -39,7 +39,6 @@ func (listener ContainerStatusListener) HandleContainersListReady(_ context.Cont
 	listener.lock.Lock()
 	defer listener.lock.Unlock()
 
-	listener.addrs = set.New[netip.Addr](len(containers))
 	for _, container := range containers {
 		listener.log.Debug().
 			Str("container_id", container.ID).
@@ -74,10 +73,16 @@ func (listener ContainerStatusListener) updateIPsWithContainer(containerID strin
 		}
 
 		if alive {
+			listener.log.Debug().Str("container_id", containerID).
+				Str("network", netName).
+				Msgf("added IP %s to alive list", netCfg.IPAddress)
 			listener.addrs.Insert(addr)
 			return
 		}
 
+		listener.log.Debug().Str("container_id", containerID).
+			Str("network", netName).
+			Msgf("removed IP %s from alive list", netCfg.IPAddress)
 		listener.addrs.Remove(addr)
 	}
 

@@ -185,7 +185,7 @@ func (listener *DockerListener) listenEvents(ctx context.Context, msgs <-chan ev
 						Msg("failed to handle Docker network event")
 				}
 			case "container":
-				if err := listener.handleNetworkEvent(ctx, event); err != nil {
+				if err := listener.handleContainerEvent(ctx, event); err != nil {
 					listener.log.Err(err).
 						Str("container_id", event.Actor.ID).
 						Str("action", event.Action).

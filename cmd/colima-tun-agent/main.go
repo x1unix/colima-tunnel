@@ -5,10 +5,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/google/gopacket/layers"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/x1unix/colima-nat-tun/internal/config"
 	"github.com/x1unix/colima-nat-tun/internal/integration"
+	"github.com/x1unix/colima-nat-tun/internal/integration/handlers"
 	"github.com/x1unix/colima-nat-tun/internal/nettun"
 	"github.com/x1unix/colima-nat-tun/internal/platform"
 	"github.com/x1unix/colima-nat-tun/internal/sshtun"
@@ -72,7 +74,10 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 		Str("api_ver", dockerInfo.APIVersion).
 		Msg("successfully connected to Docker")
 
-	listener := nettun.NewTunnel(logger, *listenerCfg)
+	containerStatusListener := integration.NewContainerStatusListener(logger)
+
+	router := buildPacketRouter(logger, containerStatusListener)
+	listener := nettun.NewTunnel(logger, *listenerCfg, router)
 	defer listener.Close()
 
 	go func() {
@@ -93,7 +98,6 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 	)
 	defer routeMgr.Close()
 
-	containerStatusListener := integration.NewContainerStatusListener(logger)
 	dockerListener := integration.NewDockerListener(logger, dockerClient, integration.EventHandlers{
 		Network:   routeMgr,
 		Container: containerStatusListener,
@@ -106,6 +110,12 @@ func run(logger zerolog.Logger, cfg *config.Config) error {
 
 	<-ctx.Done()
 	return nil
+}
+
+func buildPacketRouter(logger zerolog.Logger, pinger handlers.Pinger) *nettun.PacketRouter {
+	return nettun.NewPacketRouter(logger, nettun.ProtocolHandlers{
+		layers.IPProtocolICMPv4: handlers.NewICMPv4Handler(logger, pinger),
+	})
 }
 
 func doWithTimeout[T any](ctx context.Context, timeout time.Duration, fn func(ctx context.Context) (T, error)) (T, error) {
